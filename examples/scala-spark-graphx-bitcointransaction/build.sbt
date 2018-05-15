@@ -16,7 +16,7 @@ lazy val root = (project in file("."))
 
 scalacOptions += "-target:jvm-1.7"
 
-crossScalaVersions := Seq("2.10.5", "2.11.7")
+scalaVersion := "2.11.8"
 
 resolvers += Resolver.mavenLocal
 
@@ -28,9 +28,9 @@ assemblyJarName in assembly := "example-hcl-spark-scala-graphx-bitcointransactio
 
 libraryDependencies += "com.github.zuinnote" % "hadoopcryptoledger-fileformat" % "1.2.0" % "compile"
 
-libraryDependencies += "org.apache.spark" %% "spark-core" % "1.5.0" % "provided"
+libraryDependencies += "org.apache.spark" %% "spark-core" % "2.3.0" % "provided"
 
-libraryDependencies += "org.apache.spark" %% "spark-graphx" % "1.5.0" % "provided"
+libraryDependencies += "org.apache.spark" %% "spark-graphx" % "2.3.0" % "provided"
 
 libraryDependencies += "org.apache.hadoop" % "hadoop-client" % "2.7.0" % "provided"
 
