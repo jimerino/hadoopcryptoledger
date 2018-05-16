@@ -45,7 +45,7 @@ import org.zuinnote.hadoop.bitcoin.format.mapreduce._
 * Problem to solve: Find the top 5 bitcoin addresses with the highest number of inputs from other bitcoin addresses
 */
 
-object SparkScalaBitcoinGraphExportToGEXF {
+object SparkScalaBitcoinTraceAccount {
    def main(args: Array[String]): Unit = {
         val conf = new SparkConf().setAppName("Spark-Scala-Graphx Bitcoin PageRank (hadoopcryptoledger)")
 	val sc=new SparkContext(conf)
@@ -59,18 +59,20 @@ object SparkScalaBitcoinGraphExportToGEXF {
 val bitcoinBlocksRDD = sc.newAPIHadoopFile(inputFile, classOf[BitcoinBlockFileInputFormat], classOf[BytesWritable], classOf[BitcoinBlock],hadoopConf)
 	// extract a tuple per transaction containing Bitcoin destination address, the input transaction hash, the input transaction output index, and the current transaction hash, the current transaction output index, a (generated) long identifier
    	val bitcoinTransactionTuplesAll = bitcoinBlocksRDD.flatMap(hadoopKeyValueTuple => extractTransactionData(hadoopKeyValueTuple._2))
-
-
+bitcoinTransactionTuplesAll.map(c => c._1).distinct().repartition(1).saveAsTextFile("s3://mbdaworkshop/bitcoinm1")
+sc.stop()
 	//Inicializa a 1 el contador con la transaccion adecuada
-        var elementos = 1L
-	val bitcoinTransactionTuplesArray = Array(bitcoinTransactionTuplesAll.filter(bitcoinTransaction => bitcoinTransaction._1 == account))
+        var elementos = 1
+	var bitcoinTransactionTuplesArray = bitcoinTransactionTuplesAll.filter(bitcoinTransaction => bitcoinTransaction._1 == account)
+	var bitcoinTransactionTuples = bitcoinTransactionTuplesArray.map(z => z) 
+	var address = bitcoinTransactionTuplesArray.map(bitcoinTransactions => bitcoinTransactions._1).repartition(1).collect
 	while (elementos == 0) {
-		val address = bitcoinTransactionTuplesArray.last.map(bitcoinTransactions => bitcoinTransactions._1).distinct()
-		elementos = address.count
-		bitcoinTransactionTuplesArray :+ bitcoinTransactionTuplesAll.filter(address.contains(bitcoinTransaction => bitcoinTransactions._1))
+		bitcoinTransactionTuplesArray = bitcoinTransactionTuplesAll.filter(bitcoinTransaction => address.contains(bitcoinTransaction._1))
+		address = bitcoinTransactionTuplesArray.map(bitcoinTransactions => bitcoinTransactions._1).distinct().collect
+		elementos = address.length
+		bitcoinTransactionTuples = bitcoinTransactionTuplesArray.union(bitcoinTransactionTuples.filter(bitcoinTransaction => address.contains(bitcoinTransaction._1)))
 	}
 	// create the vertex (vertexId, Bitcoin destination address), keep in mind that the flat table contains the same bitcoin address several times
-	val bitcoinTransactionTuples = bitcoinTransactionTuplesArray.flatten
 	val bitcoinAddressIndexed = bitcoinTransactionTuples.map(bitcoinTransactions =>bitcoinTransactions._1).distinct().zipWithIndex()
 	// create the edges. Basically we need to determine which inputVertexId refers to which outputVertex Id. 
 	// This is basically a self join, where ((currentTransactionHash,currentOutputIndex), identfier) is joined with ((inputTransactionHash,currentinputIndex), indentifier)

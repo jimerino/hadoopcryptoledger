@@ -23,6 +23,7 @@ import org.apache.spark.graphx._
 
 
 import org.apache.hadoop.mapreduce._
+import org.apache.hadoop.fs._
 import org.apache.hadoop.io._
 
 import org.zuinnote.hadoop.bitcoin.format.common._
@@ -93,9 +94,7 @@ val bitcoinBlocksRDD = sc.newAPIHadoopFile(inputFile, classOf[BitcoinBlockFileIn
 	val missingBitcoinAddress = ("missing")
 	// create graph
 	val graph = Graph(bitcoinTransactionVertices, bitcoinTransactionEdges, missingBitcoinAddress)
-	val pw = new java.io.PrintWriter("myGraph.gexf")
-	pw.write(toGexf(graph))
-	pw.close
+        toGexf(sc, outputFile, graph)
 }
 
 	// extract relevant data
@@ -131,21 +130,26 @@ val bitcoinBlocksRDD = sc.newAPIHadoopFile(inputFile, classOf[BitcoinBlockFileIn
 	}
 
 
-    }
+    
 
-def toGexf[VD,ED](g:Graph[VD,ED]) =
-    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+def toGexf[VD,ED](sc:SparkContext, outputFile:String, g:Graph[VD,ED]) = {
+    val head = sc.parallelize(Array("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
     "<gexf xmlns=\"http://www.gexf.net/1.2draft\" version=\"1.2\">\n" +
     "  <graph mode=\"static\" defaultedgetype=\"directed\">\n" +
-    "    <nodes>\n" +
-    g.vertices.map(v => "      <node id=\"" + v._1 + "\" label=\"" +
-                        v._2 + "\" />\n").collect.mkString +
-    "    </nodes>\n" +
-    "    <edges>\n" +
-    g.edges.map(e => "      <edge source=\"" + e.srcId +
+    "    <nodes>\n"))
+    val vertices = g.vertices.map(v => "      <node id=\"" + v._1 + "\" label=\"" +
+                        v._2 + "\" />\n")
+    val mid = sc.parallelize(Array("    </nodes>\n" +
+    "    <edges>\n"))
+    val edges = g.edges.map(e => "      <edge source=\"" + e.srcId +
                      "\" target=\"" + e.dstId + "\" label=\"" + e.attr +
-                     "\" />\n").collect.mkString +
-    "    </edges>\n" +
+                     "\" />\n")
+    val end = sc.parallelize(Array("    </edges>\n" +
     "  </graph>\n" +
-    "</gexf>"
+    "</gexf>"))
+    
+    val gexf = head.union(vertices).union(mid).union(edges).union(end).repartition(1)
+    gexf.saveAsTextFile(outputFile)
+}
 
+}
