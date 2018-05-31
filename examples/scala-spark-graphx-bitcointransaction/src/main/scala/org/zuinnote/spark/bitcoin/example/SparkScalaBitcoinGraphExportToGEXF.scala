@@ -21,6 +21,7 @@ import org.apache.spark.SparkConf
 import org.apache.hadoop.conf._
 import org.apache.spark.graphx._
 
+import java.text.SimpleDateFormat;
 
 import org.apache.hadoop.mapreduce._
 import org.apache.hadoop.fs._
@@ -51,14 +52,17 @@ object SparkScalaBitcoinGraphExportToGEXF {
 	val sc=new SparkContext(conf)
 	val hadoopConf = new Configuration();
 	 hadoopConf.set("hadoopcryptoledger.bitcoinblockinputformat.filter.magic","F9BEB4D9");
-	jobExportToGEXP(sc,hadoopConf,args(0),args(1))
+	val parser = new SimpleDateFormat("yyyyMMdd");
+	val from = parser.parse(args(2)).getTime() / 1000;
+	val to = parser.parse(args(3)).getTime() / 1000;
+	jobExportToGEXP(sc,hadoopConf,args(0),args(1), from, to)
 	sc.stop()
       }
 
- def jobExportToGEXP(sc: SparkContext, hadoopConf: Configuration, inputFile: String, outputFile: String): Unit = {
+ def jobExportToGEXP(sc: SparkContext, hadoopConf: Configuration, inputFile: String, outputFile: String, from: Long, to: Long): Unit = {
 val bitcoinBlocksRDD = sc.newAPIHadoopFile(inputFile, classOf[BitcoinBlockFileInputFormat], classOf[BytesWritable], classOf[BitcoinBlock],hadoopConf)
 	// extract a tuple per transaction containing Bitcoin destination address, the input transaction hash, the input transaction output index, and the current transaction hash, the current transaction output index, a (generated) long identifier
-   	val bitcoinTransactionTuples = bitcoinBlocksRDD.flatMap(hadoopKeyValueTuple => extractTransactionData(hadoopKeyValueTuple._2))
+   	val bitcoinTransactionTuples = bitcoinBlocksRDD.filter(c => (c._2.getTime() >= from && c._2.getTime() <= to)).flatMap(hadoopKeyValueTuple => extractTransactionData(hadoopKeyValueTuple._2))
 	// create the vertex (vertexId, Bitcoin destination address), keep in mind that the flat table contains the same bitcoin address several times
 	val bitcoinAddressIndexed = bitcoinTransactionTuples.map(bitcoinTransactions =>bitcoinTransactions._1).distinct().zipWithIndex()
 	// create the edges. Basically we need to determine which inputVertexId refers to which outputVertex Id. 
